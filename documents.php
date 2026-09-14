@@ -66,6 +66,7 @@ $documentTypeGroups = [
     'pdf' => [],
     'image' => [],
     'excel' => [],
+    'word' => [],
     'unknown' => []
 ];
 
@@ -99,7 +100,18 @@ if ($documentType === 'pdf') {
 
     $doc['_tab_type'] = 'excel';
 
-} else {
+} elseif (
+    in_array(
+        $documentType,
+        ['word', 'docx'],
+        true
+    )
+) {
+
+    $doc['_tab_type'] = 'word';
+
+}
+ else {
 
     $doc['_tab_type'] = 'unknown';
 }
@@ -199,6 +211,7 @@ require __DIR__ . '/header.php';
         'pdf' => 'PDF',
         'image' => 'IMAGE',
         'excel' => 'EXCEL',
+        'word' => 'WORD',
         'unknown' => 'UNKNOWN'
     ];
     ?>
@@ -415,6 +428,12 @@ require __DIR__ . '/header.php';
                                                 true
                                             );
 
+                                            $isWord = in_array(
+                                                $documentType,
+                                                ['word', 'docx'],
+                                                true
+                                            );
+
 
                                             if ($isWord) {
 
@@ -431,6 +450,11 @@ require __DIR__ . '/header.php';
                                             elseif ($isExcel) {
                                                 $typeLabel = 'EXCEL';
                                                 $viewLabel = 'View EXCEL';
+                                            }
+
+                                            elseif ($isWord) {
+                                                $typeLabel = 'WORD';
+                                                $viewLabel = 'View WORD';
                                             }
                                             
                                             elseif ($documentType === 'pdf') {
