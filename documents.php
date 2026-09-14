@@ -35,7 +35,7 @@ $sql = "SELECT
             document_type,
             created_at
         FROM documents
-        WHERE client_id = :client_id";
+        WHERE client_id = :client_id AND is_deleted = 0";
 
 $params = [
     ':client_id' => $client_id
@@ -65,33 +65,44 @@ $documentTypeGroups = [
     'all' => [],
     'pdf' => [],
     'image' => [],
+    'excel' => [],
     'unknown' => []
 ];
 
 foreach ($documents as &$doc) {
 
     $documentType = strtolower(
-        trim($doc['document_type'] ?? '')
-    );
+    trim($doc['document_type'] ?? '')
+);
 
-    if ($documentType === 'pdf') {
+if ($documentType === 'pdf') {
 
-        $doc['_tab_type'] = 'pdf';
+    $doc['_tab_type'] = 'pdf';
 
-    } elseif (
-        in_array(
-            $documentType,
-            ['image', 'jpg', 'jpeg', 'png', 'gif', 'webp'],
-            true
-        )
-    ) {
+} elseif (
+    in_array(
+        $documentType,
+        ['image', 'jpg', 'jpeg', 'png', 'gif', 'webp'],
+        true
+    )
+) {
 
-        $doc['_tab_type'] = 'image';
+    $doc['_tab_type'] = 'image';
 
-    } else {
+} elseif (
+    in_array(
+        $documentType,
+        ['excel', 'xls', 'xlsx'],
+        true
+    )
+) {
 
-        $doc['_tab_type'] = 'unknown';
-    }
+    $doc['_tab_type'] = 'excel';
+
+} else {
+
+    $doc['_tab_type'] = 'unknown';
+}
 
     $documentTypeGroups['all'][] = $doc;
     $documentTypeGroups[$doc['_tab_type']][] = $doc;
@@ -187,6 +198,7 @@ require __DIR__ . '/header.php';
         'all' => 'All',
         'pdf' => 'PDF',
         'image' => 'IMAGE',
+        'excel' => 'EXCEL',
         'unknown' => 'UNKNOWN'
     ];
     ?>
@@ -340,6 +352,7 @@ require __DIR__ . '/header.php';
 
                                 $summaryPages += $defaultPrintPages;
                                 $summaryCost += $defaultActualCost;
+                                $summaryOriginalPages += $originalPages;
 
                                 $rowId = 'document_' . (int)$doc['id'];
                                 ?>
@@ -396,6 +409,12 @@ require __DIR__ . '/header.php';
                                                 true
                                             );
 
+                                            $isExcel = in_array(
+                                                $documentType,
+                                                ['excel', 'xls', 'xlsx'],
+                                                true
+                                            );
+
 
                                             if ($isWord) {
 
@@ -407,7 +426,14 @@ require __DIR__ . '/header.php';
                                                 $typeLabel = 'IMAGE';
                                                 $viewLabel = 'View IMAGE';
 
-                                            } elseif ($documentType === 'pdf') {
+                                            }
+
+                                            elseif ($isExcel) {
+                                                $typeLabel = 'EXCEL';
+                                                $viewLabel = 'View EXCEL';
+                                            }
+                                            
+                                            elseif ($documentType === 'pdf') {
 
                                                 $typeLabel = 'PDF';
                                                 $viewLabel = 'View PDF';
@@ -718,7 +744,7 @@ require __DIR__ . '/header.php';
                                         </div>
 
 
-                                        <div class="summary-item print-all-wrapper">
+                                        <!-- <div class="summary-item print-all-wrapper">
 
                                             <button
                                                 type="button"
@@ -741,7 +767,42 @@ require __DIR__ . '/header.php';
                                                 ⬇ Download All
                                             </button>
 
-                                        </div>
+                                        </div> -->
+
+                                        <div class="summary-item print-all-wrapper">
+
+    <button
+        type="button"
+        class="btn btn-print-all"
+        onclick="printAllDocuments(
+            '<?= e($groupId) ?>',
+            <?= $documentCount ?>
+        )"
+    >
+        🖨 Print All
+    </button>
+
+    <button
+        type="button"
+        class="btn btn-download-all"
+        onclick="downloadAllDocuments(
+            '<?= e($groupId) ?>'
+        )"
+    >
+        ⬇ Download All
+    </button>
+
+    <button
+        type="button"
+        class="btn btn-close-all"
+        onclick="closeDocumentGroup(
+            '<?= e($groupId) ?>'
+        )"
+    >
+        ✕ Close
+    </button>
+
+</div>
 
                                     </div>
 
@@ -1072,6 +1133,93 @@ function downloadAllDocuments(groupId) {
         encodeURIComponent(documentIds.join(','));
 
     window.location.href = url;
+}
+
+function closeDocumentGroup(groupId) {
+
+    const rows = document.querySelectorAll(
+        '.document-detail-row.' + groupId
+    );
+
+    if (!rows.length) {
+        alert('No documents found for this customer.');
+        return;
+    }
+
+    const documentIds = [];
+
+    rows.forEach(function(row) {
+
+        const documentId = row.dataset.documentId;
+
+        if (documentId) {
+            documentIds.push(documentId);
+        }
+    });
+
+    if (!documentIds.length) {
+        alert('No documents found for this customer.');
+        return;
+    }
+
+
+    const confirmed = confirm(
+        'Are you sure you want to close all ' +
+        documentIds.length +
+        ' documents for this customer?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    const url =
+        'close_documents.php?ids=' +
+        encodeURIComponent(documentIds.join(','));
+
+
+    fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin'
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+
+        if (!data.success) {
+            throw new Error(
+                data.message || 'Unable to close documents.'
+            );
+        }
+
+        /*
+         * Remove the whole phone group from the page.
+         */
+        const allRows = document.querySelectorAll(
+            '.' + groupId
+        );
+
+        allRows.forEach(function(row) {
+            row.remove();
+        });
+
+        alert(
+            data.updated +
+            ' document(s) closed successfully.'
+        );
+
+    })
+    .catch(function(error) {
+
+        console.error(error);
+
+        alert(
+            error.message ||
+            'Unable to close documents.'
+        );
+    });
 }
 
 
