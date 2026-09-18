@@ -33,9 +33,11 @@ $sql = "SELECT
             page_count,
             cost,
             document_type,
-            created_at
+            created_at,
+            is_read
         FROM documents
-        WHERE client_id = :client_id AND is_deleted = 0";
+        WHERE client_id = :client_id
+          AND is_deleted = 0";
 
 $params = [
     ':client_id' => $client_id
@@ -51,12 +53,20 @@ if ($createdDate !== '') {
     $params[':created_at'] = $createdDate;
 }
 
-$sql .= " ORDER BY phone ASC, created_at DESC";
+//$sql .= " ORDER BY phone ASC, created_at DESC";
+$sql .= " ORDER BY created_at DESC, id DESC";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 
 $documents = $stmt->fetchAll();
+
+/*
+ * Pagination
+ * 20 customer groups per page.
+ */
+$recordsPerPage = 20;
+$currentPage = max(1, (int)($_GET['page'] ?? 1));
 
 /*
  * Normalize document types and group documents by type.
@@ -238,14 +248,91 @@ require __DIR__ . '/header.php';
 
     </div>
 
+    <?php if ($tabKey === 'all' && $totalPages > 1): ?>
+
+    <div class="pagination">
+
+        <?php if ($page > 1): ?>
+
+            <a
+                class="pagination-btn"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $page - 1
+                ]) ?>"
+            >
+                &laquo; Previous
+            </a>
+
+        <?php endif; ?>
+
+
+        <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+
+            <a
+                class="pagination-btn <?= $p === $page ? 'active' : '' ?>"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $p
+                ]) ?>"
+            >
+                <?= $p ?>
+            </a>
+
+        <?php endfor; ?>
+
+
+        <?php if ($page < $totalPages): ?>
+
+            <a
+                class="pagination-btn"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $page + 1
+                ]) ?>"
+            >
+                Next &raquo;
+            </a>
+
+        <?php endif; ?>
+
+    </div>
+
+<?php endif; ?>
+
 
     <!-- Document Type Tab Panels -->
 
     <?php foreach ($tabDefinitions as $tabKey => $tabLabel): ?>
 
-        <?php
-        $groupedDocuments = $groupedDocumentsByType[$tabKey];
-        ?>
+    <?php
+    $groupedDocuments = $groupedDocumentsByType[$tabKey];
+
+    /*
+     * Pagination is based on customer/phone groups,
+     * not individual documents.
+     */
+    $totalGroups = count($groupedDocuments);
+
+    $totalPages = max(
+        1,
+        (int)ceil($totalGroups / $recordsPerPage)
+    );
+
+    $page = min($currentPage, $totalPages);
+
+    $offset = ($page - 1) * $recordsPerPage;
+
+    $groupedDocuments = array_slice(
+        $groupedDocuments,
+        $offset,
+        $recordsPerPage,
+        true
+    );
+    ?>
 
         <div
             class="document-tab-panel <?= $tabKey === 'all' ? 'active' : '' ?>"
@@ -286,6 +373,17 @@ require __DIR__ . '/header.php';
                         <?php foreach ($groupedDocuments as $phoneNumber => $phoneDocuments): ?>
 
                             <?php
+$hasUnreadDocuments = false;
+
+foreach ($phoneDocuments as $doc) {
+    if ((int)($doc['is_read'] ?? 0) === 0) {
+        $hasUnreadDocuments = true;
+        break;
+    }
+}
+?>
+
+                            <?php
                             /*
                              * Include tab name in group ID.
                              * This prevents the same phone number
@@ -303,7 +401,10 @@ require __DIR__ . '/header.php';
 
                             <!-- Phone Group Row -->
 
-                            <tr class="phone-group-row">
+                            <tr
+    class="phone-group-row <?= $hasUnreadDocuments ? 'unread-customer' : '' ?>"
+    data-phone="<?= e($phoneNumber) ?>"
+>
 
                                 <td>
 
@@ -324,11 +425,17 @@ require __DIR__ . '/header.php';
 
                                 <td class="phone-cell">
 
-                                    <strong>
-                                        <?= e($phoneNumber) ?>
-                                    </strong>
+    <?php if ($hasUnreadDocuments): ?>
 
-                                </td>
+        <span class="unread-indicator" title="Unread documents"></span>
+
+    <?php endif; ?>
+
+    <strong>
+        <?= e($phoneNumber) ?>
+    </strong>
+
+</td>
 
 
                                 <td>
@@ -922,55 +1029,104 @@ function toggleDocuments(groupId, button) {
     const currentlyHidden = rows[0].style.display === 'none';
 
     rows.forEach(function(row) {
-        row.style.display = currentlyHidden ? 'table-row' : 'none';
+        row.style.display = currentlyHidden
+            ? 'table-row'
+            : 'none';
     });
 
     button.textContent = currentlyHidden ? '−' : '+';
 
     if (currentlyHidden) {
+
         button.classList.add('expanded');
+
+        /*
+         * The customer was opened.
+         * Mark all documents in this customer group as read.
+         */
+        markCustomerDocumentsRead(groupId);
+
     } else {
+
         button.classList.remove('expanded');
     }
 }
 
+function markCustomerDocumentsRead(groupId) {
 
-/*
- * Calculate one document
- */
-function updateDocumentCalculation(documentId) {
+    const rows = document.querySelectorAll(
+        '.document-detail-row.' + groupId
+    );
 
-    const row = document.querySelector('[data-document-id="' + documentId + '"]');
-
-    if (!row) {
+    if (!rows.length) {
         return;
     }
 
-    const originalPages = parseInt(row.dataset.originalPages, 10) || 0;
-    const copiesElement = row.querySelector('.print-copies');
-    const sideElement = row.querySelector('.print-side');
+    const documentIds = [];
 
-    const copies = parseInt(copiesElement.value, 10) || 1;
-    const side = sideElement.value;
+    rows.forEach(function(row) {
 
-    let rate;
-    let pagesPerCopy;
+        const documentId = row.dataset.documentId;
 
-    if (side === 'single') {
-        rate = SINGLE_SIDE_COST;
-        pagesPerCopy = originalPages;
-    } else {
-        rate = DOUBLE_SIDE_COST;
-        pagesPerCopy = Math.ceil(originalPages / 2);
+        if (documentId) {
+            documentIds.push(documentId);
+        }
+    });
+
+    if (!documentIds.length) {
+        return;
     }
 
-    const printPages = pagesPerCopy * copies;
-    const actualCost = printPages * rate;
+    const url =
+        'mark_documents_read.php?ids=' +
+        encodeURIComponent(documentIds.join(','));
 
-    document.getElementById('print-pages-' + documentId).textContent = printPages;
-    document.getElementById('actual-cost-' + documentId).textContent = '₹' + actualCost.toFixed(2);
+    fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin'
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
 
-    updatePhoneSummary(row.closest('tbody'), row.className);
+        if (!data.success) {
+            console.error(
+                data.message || 'Unable to mark documents as read.'
+            );
+            return;
+        }
+
+        /*
+         * Remove unread styling immediately.
+         */
+        const groupRows = document.querySelectorAll(
+            '.' + groupId
+        );
+
+        groupRows.forEach(function(row) {
+
+            if (row.classList.contains('phone-group-row')) {
+
+                row.classList.remove('unread-customer');
+
+                const indicator =
+                    row.querySelector('.unread-indicator');
+
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        });
+
+    })
+    .catch(function(error) {
+
+        console.error(
+            'Error marking documents as read:',
+            error
+        );
+    });
 }
 
 
@@ -983,15 +1139,19 @@ function updatePhoneSummary(tbody, rowClass) {
         return;
     }
 
-    const phoneGroupClass = Array.from(rowClass.split(' ')).find(function(cls) {
-        return cls.indexOf('phone_') === 0;
-    });
+    const phoneGroupClass =
+        Array.from(rowClass.split(' ')).find(function(cls) {
+            return cls.indexOf('phone_') === 0;
+        });
 
     if (!phoneGroupClass) {
         return;
     }
 
-    const rows = tbody.querySelectorAll('.' + phoneGroupClass);
+    const rows =
+        tbody.querySelectorAll(
+            '.document-detail-row.' + phoneGroupClass
+        );
 
     let totalOriginalPages = 0;
     let totalPages = 0;
@@ -1003,43 +1163,113 @@ function updatePhoneSummary(tbody, rowClass) {
             return;
         }
 
-        const pages = parseInt(row.dataset.originalPages, 10) || 0;
-        const copies = parseInt(row.querySelector('.print-copies').value, 10) || 1;
-        const side = row.querySelector('.print-side').value;
-        const actualCostElement = row.querySelector('.actual-cost-value');
+        const originalPages =
+            parseInt(row.dataset.originalPages, 10) || 0;
 
-        let actualCost = 0;
-        let printPages = 0;
+        const copiesElement =
+            row.querySelector('.print-copies');
+
+        const sideElement =
+            row.querySelector('.print-side');
+
+        if (!copiesElement || !sideElement) {
+            return;
+        }
+
+        const copies =
+            parseInt(copiesElement.value, 10) || 1;
+
+        const side =
+            sideElement.value;
+
+        let printPages;
+        let rate;
 
         if (side === 'double') {
-            printPages = Math.ceil(pages / 2) * copies;
+
+            printPages =
+                Math.ceil(originalPages / 2) * copies;
+
+            rate = DOUBLE_SIDE_COST;
+
         } else {
-            printPages = pages * copies;
+
+            printPages =
+                originalPages * copies;
+
+            rate = SINGLE_SIDE_COST;
+        }
+
+        const actualCost =
+            printPages * rate;
+
+        totalOriginalPages += originalPages;
+        totalPages += printPages;
+        totalCost += actualCost;
+
+        // Keep individual row values synchronized.
+        const documentId =
+            row.dataset.documentId;
+
+        const printPagesElement =
+            document.getElementById(
+                'print-pages-' + documentId
+            );
+
+        const actualCostElement =
+            document.getElementById(
+                'actual-cost-' + documentId
+            );
+
+        if (printPagesElement) {
+            printPagesElement.textContent =
+                printPages;
         }
 
         if (actualCostElement) {
-            actualCost = parseFloat(
-                actualCostElement.textContent
-                    .replace('₹', '')
-                    .replace(/,/g, '')
-                    .trim()
-            ) || 0;
+            actualCostElement.textContent =
+                '₹' + actualCost.toFixed(2);
         }
-
-        totalOriginalPages += pages;
-        totalPages += printPages;
-        totalCost += actualCost;
     });
 
-    const summaryRow = tbody.querySelector('.phone-summary-row.' + phoneGroupClass);
+    const summaryRow =
+        tbody.querySelector(
+            '.phone-summary-row.' + phoneGroupClass
+        );
 
     if (!summaryRow) {
         return;
     }
 
-    summaryRow.querySelector('.phone-total-original-pages').textContent = totalOriginalPages;
-    summaryRow.querySelector('.phone-total-pages').textContent = totalPages;
-    summaryRow.querySelector('.phone-total-cost').textContent = '₹' + totalCost.toFixed(2);
+    const totalOriginalElement =
+        summaryRow.querySelector(
+            '.phone-total-original-pages'
+        );
+
+    const totalPagesElement =
+        summaryRow.querySelector(
+            '.phone-total-pages'
+        );
+
+    const totalCostElement =
+        summaryRow.querySelector(
+            '.phone-total-cost'
+        );
+
+    if (totalOriginalElement) {
+        totalOriginalElement.textContent =
+            totalOriginalPages;
+    }
+
+    if (totalPagesElement) {
+        totalPagesElement.textContent =
+            totalPages;
+    }
+
+    if (totalCostElement) {
+        totalCostElement.textContent =
+            '₹' + totalCost.toFixed(2);
+    }
 }
 
 
@@ -1157,6 +1387,90 @@ function downloadAllDocuments(groupId) {
         encodeURIComponent(documentIds.join(','));
 
     window.location.href = url;
+}
+
+function updateDocumentCalculation(documentId) {
+
+    const row = document.querySelector(
+        '[data-document-id="' + documentId + '"]'
+    );
+
+    if (!row) {
+        return;
+    }
+
+    const originalPages =
+        parseInt(row.dataset.originalPages, 10) || 0;
+
+    const copiesElement =
+        row.querySelector('.print-copies');
+
+    const sideElement =
+        row.querySelector('.print-side');
+
+    if (!copiesElement || !sideElement) {
+        return;
+    }
+
+    const copies =
+        parseInt(copiesElement.value, 10) || 1;
+
+    const side =
+        sideElement.value;
+
+    let printPages;
+    let rate;
+
+    if (side === 'double') {
+
+        // Two Side:
+        // 1 physical sheet = 2 original pages
+        printPages =
+            Math.ceil(originalPages / 2) * copies;
+
+        rate = DOUBLE_SIDE_COST;
+
+    } else {
+
+        // Single Side:
+        // 1 physical sheet = 1 original page
+        printPages =
+            originalPages * copies;
+
+        rate = SINGLE_SIDE_COST;
+    }
+
+    const actualCost =
+        printPages * rate;
+
+    const printPagesElement =
+        document.getElementById(
+            'print-pages-' + documentId
+        );
+
+    const actualCostElement =
+        document.getElementById(
+            'actual-cost-' + documentId
+        );
+
+    if (printPagesElement) {
+        printPagesElement.textContent =
+            printPages;
+    }
+
+    if (actualCostElement) {
+        actualCostElement.textContent =
+            '₹' + actualCost.toFixed(2);
+    }
+
+    /*
+     * Recalculate the complete customer total
+     * using the current settings of every document.
+     */
+    updatePhoneSummary(
+        row.closest('tbody'),
+        row.className
+    );
 }
 
 function closeDocumentGroup(groupId) {
