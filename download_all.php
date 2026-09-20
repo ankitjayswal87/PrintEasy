@@ -63,14 +63,13 @@ $sql = "
       AND id IN ($placeholders)
     ORDER BY id ASC
 ";
-
+//echo $sql;
 $params = array_merge([$client_id], $ids);
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 
 $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 if (!$documents) {
     http_response_code(404);
     exit('No documents found.');
@@ -159,7 +158,11 @@ foreach ($documents as $document) {
         continue;
     }
 
-    $ch = curl_init($mediaUrl);
+   $encodedMediaUrl = preg_replace_callback('/[^\x21-\x7E]/', function ($matches) {
+    return rawurlencode($matches[0]);
+    }, str_replace(' ', '%20', $mediaUrl));
+
+    $ch = curl_init($encodedMediaUrl);
 
     curl_setopt_array($ch, [
         CURLOPT_FILE            => $fp,
