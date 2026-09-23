@@ -206,6 +206,14 @@ require __DIR__ . '/header.php';
                 Clear
             </a>
 
+            <button
+                type="button"
+                class="btn btn-danger"
+                onclick="closeAllDocuments()"
+            >
+                Close All
+            </button>
+
         </div>
 
     </form>
@@ -1598,6 +1606,57 @@ function printAllDocuments(groupId, documentCount) {
         window.open(printUrl, '_blank');
     });
 }
+
+function closeAllDocuments() {
+
+    const confirmed = confirm(
+        'Are you sure you want to close ALL documents?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    fetch('close_all_documents.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('Request failed.');
+        }
+
+        return response.json();
+    })
+    .then(function(data) {
+
+        if (!data.success) {
+            alert('Unable to close documents.');
+            return;
+        }
+
+        /*
+         * Reload the documents page so all closed
+         * documents disappear from the list.
+         */
+        window.location.href = 'documents.php';
+
+    })
+    .catch(function(error) {
+
+        console.error(
+            'Close All error:',
+            error
+        );
+
+        alert(
+            'Unable to close documents. Please try again.'
+        );
+    });
+}
+
 </script>
 
 <style>

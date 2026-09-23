@@ -528,6 +528,26 @@ tbody tr:hover {
     color: white;
 }
 
+.btn-danger {
+    background: #d9534f;
+    color: #fff;
+    border: 1px solid #d9534f;
+    transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+    background: #c9302c;
+    border-color: #c9302c;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(201, 48, 44, 0.20);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
 @media (max-width: 800px) {
     .topbar {
         padding: 12px 4%;
