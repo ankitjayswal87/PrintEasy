@@ -933,6 +933,16 @@ foreach ($phoneDocuments as $doc) {
 
     <button
         type="button"
+        class="btn btn-merge-download"
+        onclick="mergeAndDownloadDocuments(
+            '<?= e($groupId) ?>'
+        )"
+    >
+        ⬇ Merge & Download
+    </button>
+
+    <button
+        type="button"
         class="btn btn-close-all"
         onclick="closeDocumentGroup(
             '<?= e($groupId) ?>'
@@ -1394,6 +1404,86 @@ function downloadAllDocuments(groupId) {
         'download_all.php?ids=' +
         encodeURIComponent(documentIds.join(','));
 
+    window.location.href = url;
+}
+
+/*
+ * Merge all documents belonging to one customer
+ * and download the generated PDF.
+ */
+function mergeAndDownloadDocuments(groupId) {
+
+    const rows = document.querySelectorAll(
+        '.document-detail-row.' + groupId
+    );
+
+    if (!rows.length) {
+        alert('No documents found for this customer.');
+        return;
+    }
+
+    const documentIds = [];
+
+    rows.forEach(function(row) {
+
+        const documentId = row.dataset.documentId;
+
+        if (documentId) {
+            documentIds.push(documentId);
+        }
+    });
+
+    if (!documentIds.length) {
+        alert('No files found for this customer.');
+        return;
+    }
+
+    const confirmed = confirm(
+        'Merge and download all ' +
+        documentIds.length +
+        ' documents for this customer?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    /*
+     * Disable button while merge is running.
+     */
+    const buttons = document.querySelectorAll(
+        '.print-all-wrapper .btn-merge-download'
+    );
+
+    let clickedButton = null;
+
+    buttons.forEach(function(button) {
+        if (
+            button.getAttribute('onclick') &&
+            button.getAttribute('onclick').includes(groupId)
+        ) {
+            clickedButton = button;
+        }
+    });
+
+    if (clickedButton) {
+        clickedButton.disabled = true;
+        clickedButton.textContent = '⏳ Merging...';
+    }
+
+    const url =
+        'merge_and_download.php?ids=' +
+        encodeURIComponent(documentIds.join(','));
+
+    /*
+     * Navigate to PHP endpoint.
+     *
+     * PHP will:
+     * 1. Validate the logged-in client.
+     * 2. Send document IDs to merge_files API.
+     * 3. Receive final_doc.
+     * 4. Stream the generated PDF to browser.
+     */
     window.location.href = url;
 }
 

@@ -548,6 +548,34 @@ tbody tr:hover {
     box-shadow: none;
 }
 
+.btn-merge-download {
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #ea580c;
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.btn-merge-download:hover {
+    background: #ea580c;
+    color: white;
+    border-color: #ea580c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.20);
+}
+
+.btn-merge-download:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 @media (max-width: 800px) {
     .topbar {
         padding: 12px 4%;
