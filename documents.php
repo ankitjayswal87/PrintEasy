@@ -256,61 +256,6 @@ require __DIR__ . '/header.php';
 
     </div>
 
-    <?php if ($tabKey === 'all' && $totalPages > 1): ?>
-
-    <div class="pagination">
-
-        <?php if ($page > 1): ?>
-
-            <a
-                class="pagination-btn"
-                href="?<?= http_build_query([
-                    'phone' => $phone,
-                    'created_at' => $createdDate,
-                    'page' => $page - 1
-                ]) ?>"
-            >
-                &laquo; Previous
-            </a>
-
-        <?php endif; ?>
-
-
-        <?php for ($p = 1; $p <= $totalPages; $p++): ?>
-
-            <a
-                class="pagination-btn <?= $p === $page ? 'active' : '' ?>"
-                href="?<?= http_build_query([
-                    'phone' => $phone,
-                    'created_at' => $createdDate,
-                    'page' => $p
-                ]) ?>"
-            >
-                <?= $p ?>
-            </a>
-
-        <?php endfor; ?>
-
-
-        <?php if ($page < $totalPages): ?>
-
-            <a
-                class="pagination-btn"
-                href="?<?= http_build_query([
-                    'phone' => $phone,
-                    'created_at' => $createdDate,
-                    'page' => $page + 1
-                ]) ?>"
-            >
-                Next &raquo;
-            </a>
-
-        <?php endif; ?>
-
-    </div>
-
-<?php endif; ?>
-
 
     <!-- Document Type Tab Panels -->
 
@@ -1007,11 +952,66 @@ foreach ($phoneDocuments as $doc) {
 
                 </table>
 
-            </div>
+</div>
 
-        </div>
+<?php if ($totalPages > 1): ?>
 
-    <?php endforeach; ?>
+    <div class="pagination">
+
+        <?php if ($page > 1): ?>
+
+            <a
+                class="pagination-btn"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $page - 1
+                ]) ?>"
+            >
+                &laquo; Previous
+            </a>
+
+        <?php endif; ?>
+
+
+        <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+
+            <a
+                class="pagination-btn <?= $p === $page ? 'active' : '' ?>"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $p
+                ]) ?>"
+            >
+                <?= $p ?>
+            </a>
+
+        <?php endfor; ?>
+
+
+        <?php if ($page < $totalPages): ?>
+
+            <a
+                class="pagination-btn"
+                href="?<?= http_build_query([
+                    'phone' => $phone,
+                    'created_at' => $createdDate,
+                    'page' => $page + 1
+                ]) ?>"
+            >
+                Next &raquo;
+            </a>
+
+        <?php endif; ?>
+
+    </div>
+
+<?php endif; ?>
+
+</div>
+
+<?php endforeach; ?>
 
 </section>
 

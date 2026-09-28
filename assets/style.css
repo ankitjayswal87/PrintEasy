@@ -576,6 +576,46 @@ tbody tr:hover {
     box-shadow: none;
 }
 
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    padding: 20px 0 5px;
+}
+
+.pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--green-dark);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover {
+    background: var(--green-light);
+    border-color: var(--green);
+}
+
+.pagination-btn.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+}
+
+.pagination-btn:active {
+    transform: translateY(1px);
+}
+
 @media (max-width: 800px) {
     .topbar {
         padding: 12px 4%;
