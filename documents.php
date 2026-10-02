@@ -77,6 +77,7 @@ $documentTypeGroups = [
     'image' => [],
     'excel' => [],
     'word' => [],
+    'powerpoint' => [],
     'unknown' => []
 ];
 
@@ -119,6 +120,16 @@ if ($documentType === 'pdf') {
 ) {
 
     $doc['_tab_type'] = 'word';
+
+} elseif (
+    in_array(
+        $documentType,
+        ['powerpoint'],
+        true
+    )
+) {
+
+    $doc['_tab_type'] = 'powerpoint';
 
 }
  else {
@@ -230,6 +241,7 @@ require __DIR__ . '/header.php';
         'image' => 'IMAGE',
         'excel' => 'EXCEL',
         'word' => 'WORD',
+        'powerpoint' => 'PPT',
         'unknown' => 'UNKNOWN'
     ];
     ?>
@@ -488,6 +500,12 @@ foreach ($phoneDocuments as $doc) {
                                                 true
                                             );
 
+                                            $isPowerpoint = in_array(
+                                                $documentType,
+                                                ['powerpoint', 'pptx'],
+                                                true
+                                            );
+
                                             $isWord = in_array(
                                                 $documentType,
                                                 ['word', 'docx'],
@@ -515,6 +533,11 @@ foreach ($phoneDocuments as $doc) {
                                             elseif ($isWord) {
                                                 $typeLabel = 'WORD';
                                                 $viewLabel = 'View WORD';
+                                            }
+
+                                            elseif ($isPowerpoint) {
+                                                $typeLabel = 'PPT';
+                                                $viewLabel = 'View PPT';
                                             }
                                             
                                             elseif ($documentType === 'pdf') {
