@@ -649,3 +649,129 @@ tbody tr:hover {
         flex-direction: column;
     }
 }
+
+/* =========================================================
+   PRINT EaSY - Compact document/details layout
+   ========================================================= */
+
+/* Keep document details left aligned */
+.document-number-cell {
+    text-align: left;
+}
+
+.document-detail-row td {
+    text-align: left;
+}
+
+.document-details {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px 14px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+/* Keep each document information item compact */
+.document-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+/* Compact phone TOTAL/action area */
+.phone-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    width: 100%;
+    padding: 8px 0;
+}
+
+.summary-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.summary-control {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.summary-control select {
+    min-height: 32px;
+    padding: 4px 7px;
+    font-size: 13px;
+}
+
+/* Keep action buttons compact and allow them to wrap */
+.print-all-wrapper {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.print-all-wrapper .btn,
+.print-all-wrapper .btn-merge-download {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+/* Prevent the TOTAL row from forcing horizontal scrolling */
+.phone-summary .summary-item strong {
+    font-size: 13px;
+}
+
+/* Tablet / smaller desktop */
+@media (max-width: 1100px) {
+    .phone-summary {
+        align-items: flex-start;
+    }
+
+    .print-all-wrapper {
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-start;
+    }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+    .document-details {
+        gap: 8px 10px;
+    }
+
+    .document-info {
+        font-size: 13px;
+    }
+
+    .phone-summary {
+        gap: 7px 10px;
+    }
+
+    .print-all-wrapper {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .print-all-wrapper .btn,
+    .print-all-wrapper .btn-merge-download {
+        width: 100%;
+        min-width: 0;
+        padding: 6px 7px;
+        font-size: 11px;
+    }
+}
