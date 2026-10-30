@@ -268,7 +268,6 @@ require __DIR__ . '/header.php';
 
     </div>
 
-
     <!-- Document Type Tab Panels -->
 
     <?php foreach ($tabDefinitions as $tabKey => $tabLabel): ?>
@@ -369,6 +368,8 @@ foreach ($phoneDocuments as $doc) {
                             <tr
     class="phone-group-row <?= $hasUnreadDocuments ? 'unread-customer' : '' ?>"
     data-phone="<?= e($phoneNumber) ?>"
+    data-customer-key="<?= e(md5((string)$phoneNumber)) ?>"
+    data-group-id="<?= e($groupId) ?>"
 >
 
                                 <td>
@@ -384,6 +385,16 @@ foreach ($phoneDocuments as $doc) {
                                     >
                                         +
                                     </button>
+                                    <label class="customer-select-label" title="Select or unselect all documents for this customer">
+                                        <input
+                                            type="checkbox"
+                                            class="customer-select-checkbox"
+                                            data-customer-key="<?= e(md5((string)$phoneNumber)) ?>"
+                                            data-group-id="<?= e($groupId) ?>"
+                                            onchange="toggleCustomerDocuments('<?= e($groupId) ?>', '<?= e(md5((string)$phoneNumber)) ?>', this.checked)"
+                                            aria-label="Select all documents for <?= e($phoneNumber) ?>"
+                                        >
+                                    </label>
 
                                 </td>
 
@@ -454,6 +465,13 @@ foreach ($phoneDocuments as $doc) {
 
 
                                     <td class="document-number-cell">
+
+                                        <label class="document-checkbox-label" title="Select this document">
+                                            <input type="checkbox" class="document-checkbox"
+                                                data-document-id="<?= (int)$doc['id'] ?>" checked
+                                                onchange="syncDocumentCheckbox(<?= (int)$doc['id'] ?>, this.checked)"
+                                                aria-label="Select document <?= (int)$doc['id'] ?>">
+                                        </label>
 
                                         <strong>
                                             <?= $index + 1 ?>.
@@ -1044,6 +1062,67 @@ foreach ($phoneDocuments as $doc) {
 const SINGLE_SIDE_COST = <?= json_encode($singleSideCost) ?>;
 const DOUBLE_SIDE_COST = <?= json_encode($doubleSideCost) ?>;
 
+function syncDocumentCheckbox(documentId, checked) {
+    document.querySelectorAll('.document-checkbox[data-document-id="' + documentId + '"]').forEach(function(box) {
+        box.checked = checked;
+    });
+    updateCustomerCheckboxes();
+}
+
+/*
+ * A customer checkbox selects/unselects every document for that phone number,
+ * including its appearances in other document-type tabs.
+ */
+function toggleCustomerDocuments(groupId, customerKey, checked) {
+    const customerRows = document.querySelectorAll(
+        '.phone-group-row[data-customer-key="' + customerKey + '"]'
+    );
+
+    customerRows.forEach(function(customerRow) {
+        const relatedGroupId = customerRow.dataset.groupId;
+        if (!relatedGroupId) return;
+
+        document.querySelectorAll('.document-detail-row.' + relatedGroupId).forEach(function(row) {
+            const id = row.dataset.documentId;
+            if (id) {
+                document.querySelectorAll('.document-checkbox[data-document-id="' + id + '"]').forEach(function(box) {
+                    box.checked = checked;
+                });
+            }
+        });
+    });
+
+    updateCustomerCheckboxes();
+}
+
+/* Keep each customer checkbox checked, unchecked, or indeterminate as appropriate. */
+function updateCustomerCheckboxes() {
+    document.querySelectorAll('.customer-select-checkbox').forEach(function(customerBox) {
+        const customerKey = customerBox.dataset.customerKey;
+        const customerRows = document.querySelectorAll(
+            '.phone-group-row[data-customer-key="' + customerKey + '"]'
+        );
+        const ids = new Set();
+
+        customerRows.forEach(function(customerRow) {
+            const relatedGroupId = customerRow.dataset.groupId;
+            if (!relatedGroupId) return;
+            document.querySelectorAll('.document-detail-row.' + relatedGroupId).forEach(function(row) {
+                if (row.dataset.documentId) ids.add(row.dataset.documentId);
+            });
+        });
+
+        let checkedCount = 0;
+        ids.forEach(function(id) {
+            const box = document.querySelector('.document-checkbox[data-document-id="' + id + '"]');
+            if (box && box.checked) checkedCount++;
+        });
+
+        customerBox.checked = ids.size > 0 && checkedCount === ids.size;
+        customerBox.indeterminate = checkedCount > 0 && checkedCount < ids.size;
+    });
+}
+
 function showDocumentTab(tabType) {
     document.querySelectorAll('.document-tab').forEach(function(tab) {
         const active = tab.dataset.tab === tabType;
@@ -1077,9 +1156,12 @@ function toggleDocuments(groupId, button) {
 
     button.textContent = currentlyHidden ? '−' : '+';
 
+    const customerRow = button.closest('.phone-group-row');
+
     if (currentlyHidden) {
 
         button.classList.add('expanded');
+        if (customerRow) customerRow.classList.add('customer-expanded');
 
         /*
          * The customer was opened.
@@ -1090,6 +1172,7 @@ function toggleDocuments(groupId, button) {
     } else {
 
         button.classList.remove('expanded');
+        if (customerRow) customerRow.classList.remove('customer-expanded');
     }
 }
 
@@ -1386,48 +1469,27 @@ function applySideToAll(groupId, side) {
  * Download All / display all files belonging to one customer
  */
 
-function downloadAllDocuments(groupId) {
-
-    const rows = document.querySelectorAll(
-        '.document-detail-row.' + groupId
-    );
-
-    if (!rows.length) {
-        alert('No documents found for this customer.');
-        return;
-    }
-
-    const documentIds = [];
-
+function getSelectedDocumentIds(groupId) {
+    const rows = groupId
+        ? document.querySelectorAll('.document-detail-row.' + groupId)
+        : document.querySelectorAll('.document-detail-row');
+    const ids = [];
+    const seen = new Set();
     rows.forEach(function(row) {
-
-        const documentId = row.dataset.documentId;
-
-        if (documentId) {
-            documentIds.push(documentId);
+        const checkbox = row.querySelector('.document-checkbox');
+        const id = row.dataset.documentId;
+        if (checkbox && checkbox.checked && id && !seen.has(id)) {
+            ids.push(id);
+            seen.add(id);
         }
     });
+    return ids;
+}
 
-    if (!documentIds.length) {
-        alert('No files found for this customer.');
-        return;
-    }
-
-    /*
-     * Send document IDs to PHP.
-     *
-     * PHP will:
-     * 1. Verify client_id
-     * 2. Download the files from media_url
-     * 3. Create a ZIP
-     * 4. Return the ZIP to the browser
-     */
-
-    const url =
-        'download_all.php?ids=' +
-        encodeURIComponent(documentIds.join(','));
-
-    window.location.href = url;
+function downloadAllDocuments(groupId) {
+    const ids = getSelectedDocumentIds(groupId);
+    if (!ids.length) { alert('Please select at least one document to download.'); return; }
+    window.location.href = 'download_all.php?ids=' + encodeURIComponent(ids.join(','));
 }
 
 /*
@@ -1435,79 +1497,10 @@ function downloadAllDocuments(groupId) {
  * and download the generated PDF.
  */
 function mergeAndDownloadDocuments(groupId) {
-
-    const rows = document.querySelectorAll(
-        '.document-detail-row.' + groupId
-    );
-
-    if (!rows.length) {
-        alert('No documents found for this customer.');
-        return;
-    }
-
-    const documentIds = [];
-
-    rows.forEach(function(row) {
-
-        const documentId = row.dataset.documentId;
-
-        if (documentId) {
-            documentIds.push(documentId);
-        }
-    });
-
-    if (!documentIds.length) {
-        alert('No files found for this customer.');
-        return;
-    }
-
-    const confirmed = confirm(
-        'Merge and download all ' +
-        documentIds.length +
-        ' documents for this customer?'
-    );
-
-    if (!confirmed) {
-        return;
-    }
-
-    /*
-     * Disable button while merge is running.
-     */
-    const buttons = document.querySelectorAll(
-        '.print-all-wrapper .btn-merge-download'
-    );
-
-    let clickedButton = null;
-
-    buttons.forEach(function(button) {
-        if (
-            button.getAttribute('onclick') &&
-            button.getAttribute('onclick').includes(groupId)
-        ) {
-            clickedButton = button;
-        }
-    });
-
-    if (clickedButton) {
-        clickedButton.disabled = true;
-        clickedButton.textContent = '⏳ Merging...';
-    }
-
-    const url =
-        'merge_and_download.php?ids=' +
-        encodeURIComponent(documentIds.join(','));
-
-    /*
-     * Navigate to PHP endpoint.
-     *
-     * PHP will:
-     * 1. Validate the logged-in client.
-     * 2. Send document IDs to merge_files API.
-     * 3. Receive final_doc.
-     * 4. Stream the generated PDF to browser.
-     */
-    window.location.href = url;
+    const ids = getSelectedDocumentIds(groupId);
+    if (!ids.length) { alert('Please select at least one document to merge.'); return; }
+    if (!confirm('Merge and download the ' + ids.length + ' selected document(s)?')) return;
+    window.location.href = 'merge_and_download.php?ids=' + encodeURIComponent(ids.join(','));
 }
 
 function updateDocumentCalculation(documentId) {
@@ -1697,27 +1690,10 @@ function printDocument(documentId) {
  * Print all documents belonging to one customer
  */
 function printAllDocuments(groupId, documentCount) {
-
-    const rows = document.querySelectorAll('.document-detail-row.' + groupId);
-
-    if (!rows.length) {
-        alert('No documents found for this customer.');
-        return;
-    }
-
-    const confirmed = confirm('Open all ' + rows.length + ' documents for printing?');
-
-    if (!confirmed) {
-        return;
-    }
-
-    rows.forEach(function(row) {
-        const documentId = row.dataset.documentId;
-        if (!documentId) return;
-
-        const printUrl = 'print.php?id=' + encodeURIComponent(documentId);
-        window.open(printUrl, '_blank');
-    });
+    const ids = getSelectedDocumentIds(groupId);
+    if (!ids.length) { alert('Please select at least one document to print.'); return; }
+    if (!confirm('Open ' + ids.length + ' selected document(s) for printing?')) return;
+    ids.forEach(function(id) { window.open('print.php?id=' + encodeURIComponent(id), '_blank'); });
 }
 
 function closeAllDocuments() {
@@ -1770,9 +1746,17 @@ function closeAllDocuments() {
     });
 }
 
+document.addEventListener('DOMContentLoaded', updateCustomerCheckboxes);
+
 </script>
 
 <style>
+.customer-select-label { display: none; align-items: center; margin-left: 8px; vertical-align: middle; }
+.phone-group-row.customer-expanded .customer-select-label { display: inline-flex; }
+.customer-select-checkbox { width: 22px; height: 22px; accent-color: var(--green); cursor: pointer; }
+.document-checkbox-label { display: inline-flex; align-items: center; margin-right: 7px; vertical-align: middle; }
+.document-checkbox { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+
 .drilldown-btn {
     width: 30px;
     height: 30px;
